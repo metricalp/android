@@ -96,8 +96,8 @@ public final class Metricalp {
             throw new RuntimeException("Metricalp: tid is missing in attributes");
         }
 
-        if (body.containsKey("bypassIpUniqueness") && !body.containsKey("metr_unique_identifier")) {
-            throw new RuntimeException("Metricalp: when bypassIpUniqueness is true, metr_unique_identifier must be set.");
+        if (body.containsKey("metr_bypass_ip") && !body.containsKey("metr_unique_identifier")) {
+            throw new RuntimeException("Metricalp: when metr_bypass_ip is true, metr_unique_identifier must be set.");
         }
 
 
