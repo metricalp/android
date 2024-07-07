@@ -152,9 +152,11 @@ public final class Metricalp {
         Metricalp instance = Metricalp.getInstance();
         String prevScreen = instance.getCurrentScreen();
 
-        if (path != null) {
-            attrs.put("path", path);
+        if(path == null) {
+            path = "(not-set)";
         }
+
+        attrs.put("path", path);
 
         HashMap<String, String> screenLeaveAttrs = new HashMap<>();
 
@@ -163,14 +165,14 @@ public final class Metricalp {
             screenLeaveAttrs.put("leave_from_duration", String.valueOf(new Date().getTime() - instance.getScreenDurationStartPoint()));
         }
 
-        instance.setCurrentScreen(null);
-        instance.setScreenDurationStartPoint(new Date().getTime());
-
         attrs.putAll(screenLeaveAttrs);
 
         if (eventAttributes != null) {
             attrs.putAll(eventAttributes);
         }
+
+        instance.setCurrentScreen(attrs.get("path"));
+        instance.setScreenDurationStartPoint(new Date().getTime());
 
         return Metricalp.sendEvent(
                 "screen_view",
@@ -243,7 +245,9 @@ public final class Metricalp {
             public void onFailure(Call call, IOException e) {}
 
             @Override
-            public void onResponse(Call call, Response response) {}
+            public void onResponse(Call call, Response response) {
+                response.close();
+            }
         });
     }
 }
