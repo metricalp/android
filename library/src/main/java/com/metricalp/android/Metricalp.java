@@ -9,6 +9,7 @@ import com.google.gson.reflect.TypeToken;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.util.Date;
 import java.util.HashMap;
 
 import okhttp3.Call;
@@ -26,6 +27,8 @@ public final class Metricalp {
 
     public final String API_ENDPOINT = "https://event.metricalp.com";
     private HashMap<String, String> attributes = null;
+    private String currentScreen = null;
+    private long screenDurationStartPoint = new Date().getTime();
 
     public OkHttpClient client = new OkHttpClient();
 
@@ -40,7 +43,7 @@ public final class Metricalp {
         return INSTANCE;
     }
 
-    public static boolean init(HashMap<String, String> attributes, String initialScreen) {
+    public static boolean init(HashMap<String, String> attributes, String initialScreen, HashMap<String, String> eventAttributes) {
         Metricalp instance = Metricalp.getInstance();
         if (instance.getAttributes() == null) {
             attributes.put("metr_collected_via", "android");
@@ -52,7 +55,7 @@ public final class Metricalp {
             return true;
         }
 
-        return Metricalp.screenViewEvent(initialScreen, null, null);
+        return Metricalp.screenViewEvent(initialScreen, eventAttributes, null);
     }
 
     public HashMap<String, String> getAttributes() {
@@ -63,6 +66,21 @@ public final class Metricalp {
         this.attributes = attributes;
     }
 
+    public String getCurrentScreen() {
+        return currentScreen;
+    }
+
+    public void setCurrentScreen(String currentScreen) {
+        this.currentScreen = currentScreen;
+    }
+
+    public long getScreenDurationStartPoint() {
+        return screenDurationStartPoint;
+    }
+
+    public void setScreenDurationStartPoint(long screenDurationStartPoint) {
+        this.screenDurationStartPoint = screenDurationStartPoint;
+    }
 
     public static void resetAttributes(HashMap<String, String> attributes) {
         Metricalp instance = Metricalp.getInstance();
@@ -81,42 +99,42 @@ public final class Metricalp {
         return instance.getAttributes();
     }
 
-    public static boolean sendEvent(String type, HashMap<String, String> eventAttributes, HashMap<String, String> overrideAttributes) {
+    public static boolean sendEvent(String type, HashMap<String, String> eventAttributes, HashMap<String, String> overrideConfigurationAttributes) {
         Metricalp instance = Metricalp.getInstance();
         HashMap<String, String> attributes = instance.getAttributes();
         HashMap<String, String> body = new HashMap<>(attributes);
 
         body.putAll(attributes);
 
-        if (overrideAttributes != null) {
-            body.putAll(overrideAttributes);
+        if (overrideConfigurationAttributes != null) {
+            body.putAll(overrideConfigurationAttributes);
         }
 
         if (!body.containsKey("tid")) {
             throw new RuntimeException("Metricalp: tid is missing in attributes");
         }
 
-        if (body.containsKey("metr_bypass_ip") && !body.containsKey("metr_unique_identifier")) {
-            throw new RuntimeException("Metricalp: when metr_bypass_ip is true, metr_unique_identifier must be set.");
+        if (!body.containsKey("metr_unique_identifier")) {
+            throw new RuntimeException("Metricalp: metr_unique_identifier must be set.");
         }
-
 
         if (eventAttributes != null) {
             body.putAll(eventAttributes);
-            body.put("path", eventAttributes.getOrDefault("path", "(not-set)"));
         }
 
         body.put("type", type);
-
 
         if (!body.containsKey("metr_user_language")) {
             body.put("metr_user_language", "unknown-unknown");
         }
 
-        if (!body.containsKey("metr_unique_identifier")) {
-            body.put("metr_unique_identifier", "");
+        if (!body.containsKey("path")) {
+            body.put("path", "(not-set)");
         }
 
+        if (!body.containsKey("metr_bypass_ip")) {
+            body.put("metr_bypass_ip", "true");
+        }
 
         String apiUrl = attributes.getOrDefault("endpoint", instance.API_ENDPOINT);
         Gson gson = new Gson();
@@ -129,37 +147,87 @@ public final class Metricalp {
         return true;
     }
 
-    public static boolean screenViewEvent(String path, HashMap<String, String> eventAttributes, HashMap<String, String> overrideAttributes) {
+    public static boolean screenViewEvent(String path, HashMap<String, String> eventAttributes, HashMap<String, String> overrideConfigurationAttributes) {
         HashMap<String, String> attrs = new HashMap<>();
-        attrs.put("path", path);
+        Metricalp instance = Metricalp.getInstance();
+        String prevScreen = instance.getCurrentScreen();
+
+        if (path != null) {
+            attrs.put("path", path);
+        }
+
+        HashMap<String, String> screenLeaveAttrs = new HashMap<>();
+
+        if (prevScreen != null) {
+            screenLeaveAttrs.put("leave_from_path", prevScreen);
+            screenLeaveAttrs.put("leave_from_duration", String.valueOf(new Date().getTime() - instance.getScreenDurationStartPoint()));
+        }
+
+        instance.setCurrentScreen(null);
+        instance.setScreenDurationStartPoint(new Date().getTime());
+
+        attrs.putAll(screenLeaveAttrs);
+
         if (eventAttributes != null) {
             attrs.putAll(eventAttributes);
         }
+
         return Metricalp.sendEvent(
                 "screen_view",
                 attrs,
-                overrideAttributes
+                overrideConfigurationAttributes
         );
     }
 
-    public static boolean sessionExitEvent(String path, HashMap<String, String> eventAttributes, HashMap<String, String> overrideAttributes) {
+    public static boolean appLeaveEvent( HashMap<String, String> eventAttributes, HashMap<String, String> overrideConfigurationAttributes) {
         HashMap<String, String> attrs = new HashMap<>();
-        attrs.put("path", path);
+        Metricalp instance = Metricalp.getInstance();
+        String prevPath = instance.getCurrentScreen();
+
+        if(prevPath == null) {
+            return false;
+        }
+
+        long screenDuration = new Date().getTime() - instance.getScreenDurationStartPoint();
+        instance.setScreenDurationStartPoint(new Date().getTime());
+        instance.setCurrentScreen(null);
+
+        attrs.put("path", prevPath);
+        attrs.put("screen_duration", String.valueOf(screenDuration));
+
+        if (eventAttributes != null) {
+            attrs.putAll(eventAttributes);
+        }
+
+        return Metricalp.sendEvent(
+                "screen_leave",
+                attrs,
+                overrideConfigurationAttributes
+        );
+    }
+
+
+    // @deprecated No more manual session exit event
+    public static boolean sessionExitEvent(String path, HashMap<String, String> eventAttributes, HashMap<String, String> overrideConfigurationAttributes) {
+        HashMap<String, String> attrs = new HashMap<>();
+        if (path != null) {
+            attrs.put("path", path);
+        }
         if (eventAttributes != null) {
             attrs.putAll(eventAttributes);
         }
         return Metricalp.sendEvent(
                 "session_exit",
                 attrs,
-                overrideAttributes
+                overrideConfigurationAttributes
         );
     }
 
-    public static boolean customEvent(String type, HashMap<String, String> eventAttributes, HashMap<String, String> overrideAttributes) {
+    public static boolean customEvent(String type, HashMap<String, String> eventAttributes, HashMap<String, String> overrideConfigurationAttributes) {
         return Metricalp.sendEvent(
                 type,
                 eventAttributes,
-                overrideAttributes
+                overrideConfigurationAttributes
         );
     }
 
