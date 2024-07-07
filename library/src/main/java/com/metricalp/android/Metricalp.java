@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Objects;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -133,8 +134,10 @@ public final class Metricalp {
             body.put("path", "(not-set)");
         }
 
-        if (!body.containsKey("metr_bypass_ip")) {
-            body.put("metr_bypass_ip", "true");
+        if (Objects.equals(body.get("metr_bypass_ip"), "disable")) {
+            body.put("metr_bypass_ip", null);
+        } else {
+            body.put("metr_bypass_ip", "enable");
         }
 
         String apiUrl = attributes.getOrDefault("endpoint", instance.API_ENDPOINT);
