@@ -19,6 +19,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 
 public final class Metricalp {
@@ -246,7 +247,10 @@ public final class Metricalp {
 
             @Override
             public void onResponse(Call call, Response response) {
-                response.close();
+                ResponseBody body = response.body();
+                if (body != null) {
+                    body.close();
+                }
             }
         });
     }
